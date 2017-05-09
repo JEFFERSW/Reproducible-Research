@@ -1,0 +1,160 @@
+---
+title: "Reproducible Research Wk2 Assignment"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+##Data used for this report
+The data used for this report is taken from the Dataset :Activity.zip Data found on the website
+[https://github.com/rdpeng/RepData_PeerAssessment1]
+
+The data comes from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+The variables included in this dataset are:  
+**steps**: Number of steps taking in a 5-minute interval (missing values are coded as NA)  
+**date**: The date on which the measurement was taken in YYYY-MM-DD format  
+**interval**: Identifier for the 5-minute interval in which measurement was taken  
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
+
+###Step 1 - Read the data having saved the data in your working directory into a folder called Coursera
+```{r}
+rawdata<-read.csv("~/Coursera/activity.csv", stringsAsFactors = FALSE)
+str(rawdata)
+head(rawdata)
+tail(rawdata)
+
+```
+
+As can be seen from the output, there are NAs in the Steps fields, and also the Date field is a character. 
+Transform the date field and investigate NAs. 
+
+Add the lubridate package first then create a new variable in date format
+```{r, echo=TRUE}
+library(lubridate)
+```
+
+
+
+```{r Change the data format }
+procdata<-(rawdata)
+procdata$newdate<-ymd(procdata$date)
+
+str(procdata)
+
+```
+
+
+
+##What is the Mean total number of steps per day
+First - sum the data up to a daily total and plot a histogram of the data
+```{r Summarise data to daily total using plyr}
+library(plyr)
+daysteps<-ddply(procdata, .(newdate),summarise, stepsperday=sum(steps))
+
+hist(daysteps$stepsperday,main="Histogram of total number of steps taken each day",ylab="number of days", xlab="Number of steps")
+```
+  
+**Mean number of steps per day ignoring missings**
+```{r}
+meanstepsperday<-as.integer(round(mean(daysteps$stepsperday,na.rm=TRUE),digits=0))
+
+
+```
+
+Mean number of steps per day ignoring missings is `r meanstepsperday`.
+
+**Median number of steps per day ignoring missings**
+```{r}
+medianstepsperday<-as.integer(median(daysteps$stepsperday,na.rm=TRUE))
+```
+ 
+Median number of steps per day ignoring missings is `r medianstepsperday`
+
+##What is the average daily activity pattern
+
+First lets average the steps per 5 minute interval
+ - remove NAs first as these mess up the plotting
+```{r fig.height=8,fig.width=8}
+procdata2<-na.omit(procdata)
+minsteps<-ddply(procdata2, .(interval),summarise, stepsperint=mean(steps))
+plot(minsteps$stepsperint,type="l",main="Time series plot of average number of steps per interval",ylab="Average number of steps", xlab="5 minute interval", ylim=c(0,250), lwd=5,col="red")
+
+```
+  
+##Missing VAlues
+
+###What is the interval with on average the most steps 
+
+```{r}
+intmax<-which(minsteps$stepsperint==max(minsteps$stepsperint))
+x<-minsteps$interval[intmax]
+x
+```
+  
+The interval with on average the most steps is `r x`.
+
+
+
+###Inputing missing values  
+Add the average number of steps per interval to all missing records.   
+Make a new dataset procdata3
+
+```{r}
+procdata3<-merge(procdata,minsteps, all=TRUE)
+procdata3$adjsteps<-ifelse(is.na(procdata3$steps),procdata3$stepsperint,procdata3$steps)
+str(procdata3)
+head(procdata3)
+tail(procdata3)
+```
+
+```{r}
+daysteps3<-ddply(procdata3, .(newdate),summarise, stepsperday3=sum(adjsteps))
+
+hist(daysteps3$stepsperday3,main="Histogram of total number of steps taken each day -with missings imputed",ylab="number of days", xlab="Number of steps")
+tail(daysteps3)
+```
+
+**Mean number of steps per day inputing missings**
+```{r}
+meanstepsperday3<-as.integer(round(mean(daysteps3$stepsperday3),digits=0))
+
+
+```
+
+Mean number of steps per day ignoring missings is `r meanstepsperday`.  
+Mean number of steps per day inputing missings is `r meanstepsperday3`.
+
+**Median number of steps per day ignoring missings**
+```{r}
+medianstepsperday3<-as.integer(median(daysteps3$stepsperday))
+```
+ 
+Median number of steps per day ignoring missings is `r medianstepsperday`  
+Median number of steps per day inputing missings is `r medianstepsperday3`
+  
+There is no difference in the means including or excluding missing values, but the median steps has increased by 1
+
+
+##Create a split by weekend or weekday and compare the two
+
+```{r}
+procdata3$day<-as.factor(ifelse(weekdays(procdata3$newdate) %in% c("Saturday","Sunday"),"Weekend","Weekday"))
+avgstepsint<-ddply(procdata3, .( interval,day),summarise,avgsteps2=mean(adjsteps))
+head(avgstepsint)
+tail(avgstepsint)
+```
+
+
+```{r fig.width=8,fig.height=8}
+
+library(lattice)
+xyplot(avgsteps2~interval|day,data=avgstepsint,
+       type='l',layout=c(1,2),
+       xlab='5 Minute Interval',ylab='Average Number of Steps')
+```
+
+
